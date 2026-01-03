@@ -39,3 +39,9 @@ Thumbs.db
 
 # Exclude synced_workflows directory from the main repository
 synced_workflows/
+
+# --- Extension VS Code ---
+# On ignore le dossier de compilation et le paquet final
+vscode-extension/out/
+vscode-extension/node_modules/
+*.vsix
