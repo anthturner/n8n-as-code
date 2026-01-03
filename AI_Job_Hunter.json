@@ -1,0 +1,57 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -128,
+        -48
+      ],
+      "id": "8de45efc-1fd0-4238-a47b-eaf30ae8e5b6",
+      "name": "When chat message received",
+      "webhookId": "54a89a3f-7931-497a-95cd-6bf220f8d31c"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        80,
+        -32
+      ],
+      "id": "90cc7719-f562-4146-95b6-e2c4c641a60a",
+      "name": "AI Agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "89366aef-2669-4cc1-a9d7-6e08b4d76432",
+  "meta": {
+    "instanceId": "edd25271aa625c76cdf6d84b2348166a32e5f283c2b13fa889b33e5c5a59d611"
+  },
+  "id": "lxJUdvmehKKjFL48",
+  "tags": []
+}
