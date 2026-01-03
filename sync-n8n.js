@@ -30,7 +30,7 @@ function cleanWorkflow(data) {
         name: data.name,
         nodes: data.nodes,
         connections: data.connections,
-        settings: data.settings
+        settings: data.settings || {}
         // On ignore volontairement : id, active, tags, pinData, meta, versionId
     };
 }
