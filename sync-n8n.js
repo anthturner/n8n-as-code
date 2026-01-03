@@ -11,25 +11,42 @@ const API_KEY = process.env.N8N_API_KEY;
 const WATCH_DIR = './synced_workflows'; 
 const POLLING_INTERVAL = 3000; 
 
-if (!N8N_HOST || !API_KEY) {
-    console.error("❌ ERREUR: Variables manquantes dans le .env");
-    process.exit(1);
-}
+if (!N8N_HOST || !API_KEY) process.exit(1);
 if (!fs.existsSync(WATCH_DIR)) fs.mkdirSync(WATCH_DIR);
 
 let workflowMap = new Map();
-let isWritingFromRemote = false;
+// Mémoire tampon pour empêcher l'écho immédiat quand le script écrit lui-même
+let selfWrittenContent = new Map(); 
 
-// --- FONCTIONS UTILITAIRES ---
+// --- LE CŒUR DU SYSTÈME : LE FILTRE ---
 
-function cleanWorkflow(data) {
+function cleanForStorage(data) {
+    // 1. Nettoyage du bruit dans les settings
+    // On copie l'objet pour ne pas muter la source
+    const settings = { ...(data.settings || {}) };
+    
+    // 🔇 LISTE NOIRE : Ce qui change tout seul ou qu'on ne veut pas dans Git
+    delete settings.availableInMCP;
+    delete settings.callerPolicy;
+    delete settings.saveDataErrorExecution;
+    delete settings.saveManualExecutions;
+    delete settings.saveExecutionProgress;
+    delete settings.executionOrder; // Souvent ajouté par défaut (v1)
+
+    // 2. Construction de l'objet "Pur"
     return {
         name: data.name,
         nodes: data.nodes || [],
         connections: data.connections || {},
-        settings: data.settings || {}
+        settings: settings,
+        tags: data.tags || [],
+        active: data.active
+        // ⛔️ ON SUPPRIME RADICALEMENT TOUT CE QUI EST VERSIONNING
+        // Pas de versionId, pas de meta, pas de staticData, pas de pinData
     };
 }
+
+// --- API ---
 
 async function fetchAllWorkflows() {
     try {
@@ -45,51 +62,48 @@ async function fetchWorkflowDetails(id) {
     } catch (e) { return null; }
 }
 
-// --- 1. SYNCHRO DESCENDANTE & INITIALISATION (N8N -> DISQUE) ---
+// --- 1. SYNCHRO DESCENDANTE (N8N -> DISQUE) ---
 
 async function pollN8n() {
     const workflows = await fetchAllWorkflows();
-    
-    // Mise à jour de l'annuaire
     workflowMap.clear();
     workflows.forEach(wf => workflowMap.set(wf.name, wf.id));
 
-    // ON BOUCLE SUR LES WORKFLOWS DISTANTS (C'est ça le changement majeur)
     for (const [name, id] of workflowMap) {
-        
-        // On construit le nom de fichier attendu
-        // Attention : Si votre nom contient des "/" ou ":", ça peut poser problème sur Windows/Mac
-        const safeName = name.replace(/[\/\\:]/g, '_'); 
-        const fileName = `${safeName}.json`;
-        const filePath = path.join(WATCH_DIR, fileName);
+        const safeName = name.replace(/[\/\\:]/g, '_');
+        const filePath = path.join(WATCH_DIR, `${safeName}.json`);
 
-        // Cas 1 : Le fichier n'existe pas -> ON L'INITIALISE
+        // Récupération de la version n8n (Brute)
+        const remoteRaw = await fetchWorkflowDetails(id);
+        if (!remoteRaw) continue;
+
+        // 🧹 ON NETTOIE IMMÉDIATEMENT
+        // On ne travaille plus jamais avec la version brute qui contient le versionId
+        const remoteClean = cleanForStorage(remoteRaw);
+        const remoteString = JSON.stringify(remoteClean, null, 2);
+
+        // A. Cas : Initialisation (Fichier absent)
         if (!fs.existsSync(filePath)) {
-            console.log(`✨ Nouveau workflow n8n trouvé : "${name}". Création du fichier local...`);
-            const remoteWorkflow = await fetchWorkflowDetails(id);
-            if (remoteWorkflow) {
-                isWritingFromRemote = true;
-                fs.writeFileSync(filePath, JSON.stringify(remoteWorkflow, null, 2));
-                setTimeout(() => { isWritingFromRemote = false; }, 1000);
-            }
-            continue; // On passe au suivant
+            console.log(`✨ Init: "${name}"`);
+            selfWrittenContent.set(filePath, remoteString);
+            fs.writeFileSync(filePath, remoteString);
+            continue;
         }
 
-        // Cas 2 : Le fichier existe -> ON VÉRIFIE LES MISES À JOUR
-        const remoteWorkflow = await fetchWorkflowDetails(id);
-        if (!remoteWorkflow) continue;
-
+        // B. Cas : Vérification de mise à jour
         let localJson;
         try { localJson = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { continue; }
+        
+        // On nettoie aussi le local (au cas où il y aurait des restes)
+        const localClean = cleanForStorage(localJson);
 
-        const remoteClean = cleanWorkflow(remoteWorkflow);
-        const localClean = cleanWorkflow(localJson);
-
-        if (!deepEqual(remoteClean, localClean)) {
-            console.log(`⬇️  Modif n8n sur "${name}". Mise à jour locale...`);
-            isWritingFromRemote = true;
-            fs.writeFileSync(filePath, JSON.stringify(remoteWorkflow, null, 2));
-            setTimeout(() => { isWritingFromRemote = false; }, 1000);
+        // COMPARATOR : On compare "Propre" vs "Propre"
+        if (!deepEqual(localClean, remoteClean)) {
+            console.log(`⬇️  Modif n8n (LogicOnly) sur "${name}". Mise à jour locale...`);
+            
+            // 💾 ÉCRITURE : On écrit la version NETTOYÉE (sans versionId)
+            selfWrittenContent.set(filePath, remoteString);
+            fs.writeFileSync(filePath, remoteString);
         }
     }
 }
@@ -103,55 +117,46 @@ const watcher = chokidar.watch(WATCH_DIR, {
 });
 
 watcher.on('change', async (filePath) => {
-    if (isWritingFromRemote) return;
     if (!filePath.endsWith('.json')) return;
 
+    // --- 🛡️ Protection Anti-Echo ---
+    let currentContent;
+    try { currentContent = fs.readFileSync(filePath, 'utf8'); } catch (e) { return; }
+
+    if (selfWrittenContent.has(filePath)) {
+        if (currentContent === selfWrittenContent.get(filePath)) return;
+    }
+    // -------------------------------
+
     const filename = path.basename(filePath);
-    // On enlève l'extension pour retrouver le nom
-    const nameFromFile = path.parse(filename).name; 
-    
-    // Note : Si vous avez des noms avec caractères spéciaux remplacés par "_", 
-    // la correspondance inverse peut être délicate. 
-    // Idéalement, gardez des noms simples dans n8n.
-    
+    const nameFromFile = path.parse(filename).name;
     let id = workflowMap.get(nameFromFile);
 
-    // Tentative de refresh si ID inconnu
     if (!id) { await pollN8n(); id = workflowMap.get(nameFromFile); }
-    
-    if (!id) {
-        // C'est peut-être un fichier que vous venez de créer manuellement ?
-        // Pour l'instant on ignore pour éviter de créer des doublons par erreur
-        console.warn(`⚠️  Workflow local "${nameFromFile}" non lié. (ID introuvable dans n8n)`);
-        return;
-    }
+    if (!id) return;
 
-    console.log(`⬆️  Sauvegarde locale de "${nameFromFile}" -> Envoi vers n8n...`);
+    console.log(`⬆️  Push local: "${nameFromFile}"`);
 
     try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const json = JSON.parse(content);
-        const cleanData = cleanWorkflow(json);
+        const json = JSON.parse(currentContent);
+        // On s'assure d'envoyer un format propre (le filtre fait aussi office de validateur)
+        const payload = cleanForStorage(json);
 
-        await axios.put(`${N8N_HOST}/api/v1/workflows/${id}`, cleanData, {
+        await axios.put(`${N8N_HOST}/api/v1/workflows/${id}`, payload, {
             headers: { 'X-N8N-API-KEY': API_KEY }
         });
         
         console.log(`✅ Succès !`);
-        console.log(`🔗 ${N8N_HOST}/workflow/${id}`);
+        // On ne met PAS à jour le fichier local. 
+        // Le prochain Poll va comparer [Local] vs [RemoteNettoyé].
+        // Comme la logique est la même, ils seront égaux => Pas d'écriture => Pas de Git sale.
 
     } catch (e) {
-        if (e.response) {
-             console.error(`❌ Erreur API (${e.response.status}):`, e.response.data.message);
-        } else {
-             console.error(`❌ Erreur:`, e.message);
-        }
+        if (e.response) console.error(`❌ Erreur API:`, e.response.data.message);
+        else console.error(`❌ Erreur:`, e.message);
     }
 });
 
-// --- LANCEMENT ---
-console.log(`🤖 Système Full-Sync (Init + Bidirectionnel) Actif`);
-console.log(`📂 Dossier : ${WATCH_DIR}`);
-
-pollN8n(); // Au lancement, ceci va télécharger TOUS vos workflows manquants
+console.log(`🤖 GitOps Sync Actif (Mode "No Noise")`);
+pollN8n();
 setInterval(pollN8n, POLLING_INTERVAL);
