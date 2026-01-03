@@ -8,157 +8,142 @@ const deepEqual = require('deep-equal');
 // --- CONFIGURATION ---
 const N8N_HOST = process.env.N8N_HOST;
 const API_KEY = process.env.N8N_API_KEY;
-const WATCH_DIR = './synced_workflows';
-const POLLING_INTERVAL = 3000; // Vérifie n8n toutes les 3 secondes
+const WATCH_DIR = './synced_workflows'; // Dossier de travail
+const POLLING_INTERVAL = 3000; // Vérifie n8n toutes les 3s
 
+// Vérifications
 if (!N8N_HOST || !API_KEY) {
     console.error("❌ ERREUR: Variables manquantes dans le .env");
     process.exit(1);
 }
 if (!fs.existsSync(WATCH_DIR)) fs.mkdirSync(WATCH_DIR);
 
-// --- ÉTAT GLOBAL ---
-let workflowMap = new Map(); // Nom -> ID
-let isWritingFromRemote = false; // LE VERROU CRITIQUE
+// État
+let workflowMap = new Map();
+let isWritingFromRemote = false; // Le verrou pour éviter la boucle infinie
 
-// Fonction de nettoyage pour comparaison (on garde l'essentiel)
+// --- FONCTIONS UTILITAIRES ---
+
+// Nettoie le workflow pour ne garder que la logique (pour la comparaison et l'envoi)
 function cleanWorkflow(data) {
     return {
         name: data.name,
         nodes: data.nodes,
         connections: data.connections,
         settings: data.settings
-        // On ignore tags, pinData, active, id, meta, etc. pour la comparaison
+        // On ignore volontairement : id, active, tags, pinData, meta, versionId
     };
 }
 
-// --- 1. FONCTIONS API ---
-
 async function fetchAllWorkflows() {
     try {
-        const response = await axios.get(`${N8N_HOST}/api/v1/workflows`, {
-            headers: { 'X-N8N-API-KEY': API_KEY }
-        });
-        return response.data.data;
-    } catch (error) {
-        console.error("⚠️ Erreur polling n8n:", error.message);
-        return [];
-    }
+        const res = await axios.get(`${N8N_HOST}/api/v1/workflows`, { headers: { 'X-N8N-API-KEY': API_KEY } });
+        return res.data.data;
+    } catch (e) { return []; }
 }
 
 async function fetchWorkflowDetails(id) {
     try {
-        const response = await axios.get(`${N8N_HOST}/api/v1/workflows/${id}`, {
-            headers: { 'X-N8N-API-KEY': API_KEY }
-        });
-        return response.data;
-    } catch (error) {
-        return null;
-    }
+        const res = await axios.get(`${N8N_HOST}/api/v1/workflows/${id}`, { headers: { 'X-N8N-API-KEY': API_KEY } });
+        return res.data;
+    } catch (e) { return null; }
 }
 
-async function pushToN8n(id, data) {
-    const cleanData = cleanWorkflow(data);
-    await axios.put(`${N8N_HOST}/api/v1/workflows/${id}`, cleanData, {
-        headers: { 'X-N8N-API-KEY': API_KEY }
-    });
-}
-
-// --- 2. LE POLLERS (N8N -> LOCAL) ---
+// --- 1. SYNCHRO DESCENDANTE (N8N -> DISQUE) ---
 
 async function pollN8n() {
     const workflows = await fetchAllWorkflows();
     
-    // Mise à jour de l'annuaire
+    // Mise à jour de l'annuaire (Nom -> ID)
     workflowMap.clear();
     workflows.forEach(wf => workflowMap.set(wf.name, wf.id));
 
-    // Pour chaque fichier local, on vérifie si la version distante est plus récente/différente
     const files = fs.readdirSync(WATCH_DIR).filter(f => f.endsWith('.json'));
 
     for (const file of files) {
         const name = path.parse(file).name;
         const id = workflowMap.get(name);
-        if (!id) continue;
+        
+        if (!id) continue; // Le workflow n'existe pas encore dans n8n, on ignore
 
-        // On récupère le workflow complet depuis n8n
         const remoteWorkflow = await fetchWorkflowDetails(id);
         if (!remoteWorkflow) continue;
 
-        // On lit le local
         const filePath = path.join(WATCH_DIR, file);
         let localJson;
-        try {
-            localJson = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        } catch (e) { continue; } // Fichier en cours d'écriture ou invalide
+        try { localJson = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { continue; }
 
-        // COMPARAISON MAGIQUE
+        // On compare uniquement ce qui compte (nodes, connections...)
         const remoteClean = cleanWorkflow(remoteWorkflow);
         const localClean = cleanWorkflow(localJson);
 
-        // Si c'est différent, n8n a gagné -> on met à jour le local
         if (!deepEqual(remoteClean, localClean)) {
-            console.log(`⬇️  Modif détectée dans n8n pour "${name}". Mise à jour locale...`);
+            console.log(`⬇️  Modif détectée dans n8n sur "${name}". Mise à jour du fichier...`);
             
-            // 🔒 ON ACTIVE LE VERROU
-            isWritingFromRemote = true;
-            
-            // On écrit le fichier proprement formaté (prettify)
+            isWritingFromRemote = true; // 🔒 VERROUILLAGE
             fs.writeFileSync(filePath, JSON.stringify(remoteWorkflow, null, 2));
             
-            // On relâche le verrou après un court délai pour laisser chokidar ignorer l'event
+            // On déverrouille après 1 seconde
             setTimeout(() => { isWritingFromRemote = false; }, 1000);
         }
     }
 }
 
-// --- 3. LE WATCHER (LOCAL -> N8N) ---
+// --- 2. SYNCHRO MONTANTE (DISQUE -> N8N) ---
 
-console.log(`🔁 Sync Bidirectionnelle Active (Polling: ${POLLING_INTERVAL}ms)`);
-
-// Initialisation immédiate
-pollN8n(); 
-// Lancement de la boucle infinie de polling
-setInterval(pollN8n, POLLING_INTERVAL);
-
-// Surveillance disque avec Chokidar
 const watcher = chokidar.watch(WATCH_DIR, {
-    ignored: /(^|[\/\\])\../, 
+    ignored: /(^|[\/\\])\../,
     persistent: true,
     awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 }
 });
 
 watcher.on('change', async (filePath) => {
-    // 🔒 SI LE VERROU EST ACTIF, C'EST NOUS QUI ÉCRIVONS -> ON IGNORE
+    // Si c'est le script lui-même qui vient d'écrire, on ne fait rien
     if (isWritingFromRemote) return;
-
     if (!filePath.endsWith('.json')) return;
 
     const filename = path.basename(filePath);
     const name = path.parse(filename).name;
     let id = workflowMap.get(name);
 
-    // Si ID inconnu, petit refresh rapide au cas où
+    // Si on ne connait pas l'ID, on tente un refresh rapide de l'annuaire
+    if (!id) { await pollN8n(); id = workflowMap.get(name); }
+    
     if (!id) {
-        await pollN8n();
-        id = workflowMap.get(name);
-    }
-
-    if (!id) {
-        console.log(`⚠️ Workflow local "${name}" introuvable dans n8n. (Créez-le dans n8n d'abord ou attendez le prochain poll)`);
+        console.warn(`⚠️  Workflow "${name}" introuvable dans n8n. Créez-le d'abord dans l'interface ou vérifiez le nom.`);
         return;
     }
 
     console.log(`⬆️  Sauvegarde locale de "${name}" -> Envoi vers n8n...`);
-    
+
     try {
         const content = fs.readFileSync(filePath, 'utf8');
         const json = JSON.parse(content);
         
-        await pushToN8n(id, json);
-        console.log(`✅ n8n mis à jour !`);
+        // On nettoie avant d'envoyer pour éviter les erreurs 400
+        const cleanData = cleanWorkflow(json);
+
+        await axios.put(`${N8N_HOST}/api/v1/workflows/${id}`, cleanData, {
+            headers: { 'X-N8N-API-KEY': API_KEY }
+        });
         
+        console.log(`✅ Succès ! (ID: ${id})`);
+        // Astuce : Affiche l'URL cliquable dans le terminal (CMD+Click)
+        console.log(`🔗 ${N8N_HOST}/workflow/${id}`);
+
     } catch (e) {
-        console.error(`❌ Erreur d'envoi : ${e.message}`);
+        if (e.response) {
+             console.error(`❌ Erreur API n8n (${e.response.status}):`, e.response.data.message);
+        } else {
+             console.error(`❌ Erreur:`, e.message);
+        }
     }
 });
+
+// --- LANCEMENT ---
+console.log(`🤖 Système de Synchro Bidirectionnelle Actif`);
+console.log(`📂 Dossier : ${WATCH_DIR}`);
+console.log(`📡 Polling n8n : toutes les ${POLLING_INTERVAL/1000}s`);
+
+pollN8n(); // Premier scan au démarrage
+setInterval(pollN8n, POLLING_INTERVAL); // Boucle
