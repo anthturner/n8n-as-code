@@ -1,73 +1,97 @@
-// On charge les variables d'environnement tout en haut
 require('dotenv').config();
-
 const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
+const open = require('open'); // <--- NOUVEL IMPORT
 
-// --- RÉCUPÉRATION ET VÉRIFICATION DES VARIABLES ---
+// --- CONFIGURATION ---
 const N8N_HOST = process.env.N8N_HOST;
 const API_KEY = process.env.N8N_API_KEY;
-const WORKFLOW_ID = process.env.N8N_WORKFLOW_ID;
-// On utilise une valeur par défaut si la variable n'est pas définie dans le .env
-const LOCAL_FILE = process.env.LOCAL_FILE_PATH || './AI_Job_Hunter.json';
+const WATCH_DIR = './synced_workflows';
 
-// Petit check de sécurité au démarrage
-if (!N8N_HOST || !API_KEY || !WORKFLOW_ID) {
-    console.error("❌ ERREUR: Variables manquantes dans le fichier .env (N8N_HOST, N8N_API_KEY ou N8N_WORKFLOW_ID)");
+if (!N8N_HOST || !API_KEY) {
+    console.error("❌ ERREUR: Variables manquantes dans le .env");
     process.exit(1);
 }
 
-console.log(`--- 🤖 Synchronisation Active ---`);
-console.log(`📡 Cible n8n   : ${N8N_HOST} (Workflow #${WORKFLOW_ID})`);
-console.log(`📂 Fichier local : ${LOCAL_FILE}`);
+if (!fs.existsSync(WATCH_DIR)) fs.mkdirSync(WATCH_DIR);
 
-// --- LOGIQUE DE SURVEILLANCE ---
+let workflowMap = new Map();
 
-// Note: fs.watchFile vérifie périodiquement (polling). 
-// Pour un script en prod, 'chokidar' ou 'fs.watch' est souvent plus réactif, 
-// mais watchFile est très stable pour des fichiers simples.
-fs.watchFile(LOCAL_FILE, { interval: 1000 }, async (curr, prev) => {
-    // On évite de déclencher si le fichier a juste été accédé mais pas modifié
-    if (curr.mtime <= prev.mtime) return;
-
-    console.log(`\n📝 Changement détecté sur ${LOCAL_FILE}, envoi vers n8n...`);
-    
+async function refreshWorkflowMap() {
     try {
-        const fileContent = fs.readFileSync(LOCAL_FILE, 'utf8');
-        let workflowData;
-
-        try {
-            workflowData = JSON.parse(fileContent);
-        } catch (jsonError) {
-            console.error('⚠️ JSON Invalide. Envoi annulé.');
-            return;
-        }
-
-        // --- 🛡️ NETTOYAGE ULTRA-STRICT ---
-        
-        const cleanWorkflow = {
-            name: workflowData.name,               // Le nom
-            nodes: workflowData.nodes,             // La logique
-            connections: workflowData.connections, // Les liens
-            settings: workflowData.settings        // Les options (timezone, etc)
-            
-            // ❌ ON NE MET PLUS RIEN D'AUTRE
-            // ni tags, ni active, ni id, ni meta, ni versionId
-        };
-
-        // Envoi à l'API
-        await axios.put(`${N8N_HOST}/api/v1/workflows/${WORKFLOW_ID}`, 
-            cleanWorkflow, 
-            { headers: { 'X-N8N-API-KEY': API_KEY } }
-        );
-        
-        console.log(`✅ Succès : Workflow #${WORKFLOW_ID} mis à jour dans n8n !`);
-        
+        const response = await axios.get(`${N8N_HOST}/api/v1/workflows`, {
+            headers: { 'X-N8N-API-KEY': API_KEY }
+        });
+        workflowMap.clear();
+        response.data.data.forEach(wf => {
+            workflowMap.set(wf.name, wf.id);
+        });
+        console.log(`📚 Annuaire mis à jour : ${workflowMap.size} workflows.`);
     } catch (error) {
-        if (error.response) {
-            console.error(`❌ Erreur API n8n (${error.response.status}):`, JSON.stringify(error.response.data, null, 2));
-        } else {
-            console.error('❌ Erreur Système :', error.message);
-        }
+        console.error("❌ Erreur API :", error.message);
     }
-});
+}
+
+(async () => {
+    await refreshWorkflowMap();
+    console.log(`👀 Surveillance active : ${WATCH_DIR}`);
+
+    let isProcessing = false;
+
+    fs.watch(WATCH_DIR, async (eventType, filename) => {
+        if (!filename || !filename.endsWith('.json') || isProcessing) return;
+
+        const targetName = path.parse(filename).name;
+        let targetId = workflowMap.get(targetName);
+
+        if (!targetId) {
+            await refreshWorkflowMap();
+            targetId = workflowMap.get(targetName);
+        }
+
+        if (!targetId) return;
+
+        const filePath = path.join(WATCH_DIR, filename);
+        isProcessing = true;
+
+        setTimeout(async () => {
+            try {
+                if (!fs.existsSync(filePath)) { isProcessing = false; return; }
+
+                console.log(`\n⚡️ Modification : ${targetName} -> ID ${targetId}`);
+                
+                const fileContent = fs.readFileSync(filePath, 'utf8');
+                let workflowData;
+                try { workflowData = JSON.parse(fileContent); } catch (e) { isProcessing = false; return; }
+
+                const cleanWorkflow = {
+                    name: workflowData.name,
+                    nodes: workflowData.nodes,
+                    connections: workflowData.connections,
+                    settings: workflowData.settings
+                };
+
+                await axios.put(`${N8N_HOST}/api/v1/workflows/${targetId}`, 
+                    cleanWorkflow, 
+                    { headers: { 'X-N8N-API-KEY': API_KEY } }
+                );
+                
+                console.log(`✅ Workflow mis à jour !`);
+                
+                // --- 🪄 LA MAGIE OPÈRE ICI ---
+                const targetUrl = `${N8N_HOST}/workflow/${targetId}`;
+                console.log(`🖥️  Ouverture du navigateur : ${targetUrl}`);
+                
+                // Ouvre l'URL dans le navigateur par défaut
+                await open(targetUrl);
+                // -----------------------------
+
+            } catch (error) {
+                console.error(`❌ Erreur :`, error.message);
+            } finally {
+                isProcessing = false;
+            }
+        }, 500);
+    });
+})();
