@@ -36,3 +36,6 @@ package-lock.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Exclude synced_workflows directory from the main repository
+synced_workflows/

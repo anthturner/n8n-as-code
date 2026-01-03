@@ -52,3 +52,27 @@ Simply run the sync script:
 
 ```bash
 node sync.js
+```
+
+---
+
+## 📁 Managing `synced_workflows` Directory
+
+The `synced_workflows` directory is excluded from the main repository via `.gitignore`. This allows you to manage your workflows independently. The repository is automatically initialized when you run `npm install` thanks to the `postinstall` script.
+
+### Optional: Connect to a Remote Repository
+
+If you want to sync your workflows to a remote repository, follow these steps:
+
+1. Navigate to the `synced_workflows` directory:
+   ```bash
+   cd synced_workflows
+   ```
+
+2. Connect to your remote repository:
+   ```bash
+   git remote add origin <your-remote-repo-url>
+   git push -u origin main
+   ```
+
+Now, your workflows are versioned independently of the main repository.
