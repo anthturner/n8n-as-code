@@ -26,7 +26,7 @@ The **main goal**? Enable AI Agents (Cursor, Copilot, Windsurf) to generate and 
 
 1.  **Clone this repository:**
     ```bash
-    git clone [https://github.com/EtienneLescot/n8n-as-code.git](https://github.com/EtienneLescot/n8n-as-code.git)
+    git clone https://github.com/EtienneLescot/n8n-as-code.git
     cd n8n-as-code
     ```
 
