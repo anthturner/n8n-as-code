@@ -2,8 +2,14 @@
     "name": "n8n-as-code",
     "displayName": "n8n as code",
     "description": "Edit your n8n workflows directly in VS Code with AI assistance.",
-    "version": "0.0.1",
+    "version": "0.0.3",
     "publisher": "etienne-lescot",
+    "files": [
+        "out",
+        "assets",
+        "LICENSE.md",
+        "README.md"
+    ],
     "license": "MIT",
     "icon": "assets/logo.png",
     "repository": {
@@ -191,14 +197,17 @@
         "http-proxy": "^1.18.1"
     },
     "devDependencies": {
+        "@types/http-proxy": "^1.17.17",
         "@types/node": "^18.0.0",
         "@types/vscode": "^1.85.0",
-        "@types/http-proxy": "^1.17.17",
+        "esbuild": "^0.27.2",
         "typescript": "^5.3.3"
     },
     "scripts": {
-        "build": "tsc -b",
+        "vscode:prepublish": "npm run package-bundle",
         "compile": "tsc -b",
-        "watch": "tsc -b -w"
+        "watch": "tsc -b -w",
+        "package-bundle": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+        "build": "npm run compile && npm run package-bundle"
     }
 }
