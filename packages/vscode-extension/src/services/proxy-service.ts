@@ -45,7 +45,8 @@ export class ProxyService {
             secure: false,
             cookieDomainRewrite: "", // Rewrite all domains to match localhost
             preserveHeaderKeyCase: true, // Preserve header casing
-            autoRewrite: true // Automatically rewrite redirects
+            autoRewrite: true, // Automatically rewrite redirects
+            xfwd: true // Add x-forwarded headers automatically
         });
 
         // Strip headers that block iframe embedding and manage cookies
@@ -159,22 +160,27 @@ export class ProxyService {
 
                 // Add Forwarding Headers - CRITICAL for n8n to know its external URL
                 const proxyHost = `localhost:${this.port}`;
+                const targetIsHttps = this.target.startsWith('https');
+                const proto = targetIsHttps ? 'https' : 'http';
+
                 req.headers['x-forwarded-host'] = proxyHost;
-                req.headers['x-forwarded-proto'] = 'http';
+                req.headers['x-forwarded-proto'] = proto;
                 req.headers['x-forwarded-port'] = this.port.toString();
                 req.headers['x-forwarded-for'] = req.socket.remoteAddress;
 
                 // Ensure n8n sees the proxy as the origin to match X-Forwarded-Host
-                req.headers['origin'] = `http://${proxyHost}`;
+                // For HTTPS targets (cloud), using the target itself as origin often helps bypass CSRF/CORS checks
+                req.headers['origin'] = targetIsHttps ? this.target : `${proto}://${proxyHost}`;
+
                 // Keep the referer matching the proxy URL
                 if (req.headers['referer']) {
-                    req.headers['referer'] = req.headers['referer'].replace(new RegExp(`^http://localhost:[0-9]+`), `http://${proxyHost}`);
+                    req.headers['referer'] = req.headers['referer'].replace(new RegExp(`^http://localhost:[0-9]+`), `${proto}://${proxyHost}`);
                 }
 
                 if (req.headers['cookie']?.includes('n8n-auth')) {
-                    this.log(`[Proxy] Forwarding: ${req.method} ${url} (Cookie injected)`);
+                    this.log(`[Proxy] Forwarding: ${req.method} ${url} (Cookie injected) [${proto}]`);
                 } else {
-                    this.log(`[Proxy] Forwarding: ${req.method} ${url}`);
+                    this.log(`[Proxy] Forwarding: ${req.method} ${url} [${proto}]`);
                 }
 
                 // CRITICAL for SSE: Disable buffering
@@ -203,9 +209,12 @@ export class ProxyService {
 
                     // Add same headers to WS upgrade request
                     const proxyHost = `localhost:${this.port}`;
+                    const targetIsHttps = this.target.startsWith('https');
+                    const proto = targetIsHttps ? 'https' : 'http';
+
                     req.headers['x-forwarded-host'] = proxyHost;
-                    req.headers['x-forwarded-proto'] = 'http';
-                    req.headers['origin'] = `http://${proxyHost}`;
+                    req.headers['x-forwarded-proto'] = proto;
+                    req.headers['origin'] = targetIsHttps ? this.target : `${proto}://${proxyHost}`;
 
                     // Inject cookies for WS as well
                     if (this.cookieJar.size > 0) {
