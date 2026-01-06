@@ -11,11 +11,15 @@ let syncManager: SyncManager | undefined;
 let watchModeActive = false;
 const statusBar = new StatusBar();
 const proxyService = new ProxyService();
+const treeProvider = new WorkflowTreeProvider();
 const outputChannel = vscode.window.createOutputChannel("n8n-as-code");
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel.show(true);
     outputChannel.appendLine('🔌 Activation of "n8n-as-code" ...');
+
+    // Register Tree View early
+    vscode.window.registerTreeDataProvider('n8n-explorer.workflows', treeProvider);
 
     // Pass output channel to proxy service
     proxyService.setOutputChannel(outputChannel);
@@ -253,33 +257,27 @@ export async function activate(context: vscode.ExtensionContext) {
     // 2b. Listen for Config Changes
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (e.affectsConfiguration('n8n.syncMode') || e.affectsConfiguration('n8n.pollInterval')) {
-                const config = vscode.workspace.getConfiguration('n8n');
-                const mode = config.get<string>('syncMode') || 'auto';
-
-                if (mode === 'auto') {
-                    if (!syncManager) await initializeSyncManager(context);
-                    if (syncManager) {
-                        statusBar.setWatchMode(true);
-                        await syncManager.startWatch();
-                    }
-                } else {
-                    statusBar.setWatchMode(false);
-                    syncManager?.stopWatch();
-                }
+            if (
+                e.affectsConfiguration('n8n.host') ||
+                e.affectsConfiguration('n8n.apiKey') ||
+                e.affectsConfiguration('n8n.syncFolder') ||
+                e.affectsConfiguration('n8n.syncMode') ||
+                e.affectsConfiguration('n8n.pollInterval')
+            ) {
+                outputChannel.appendLine('[n8n] Settings changed. Re-initializing SyncManager...');
+                await initializeSyncManager(context);
             }
         })
     );
-
-    // Register Tree View
-    const treeProvider = new WorkflowTreeProvider();
-    vscode.window.registerTreeDataProvider('n8n-explorer.workflows', treeProvider);
-
-    // Pass syncManager to provider once ready
-    if (syncManager) treeProvider.setSyncManager(syncManager);
 }
 
 async function initializeSyncManager(context: vscode.ExtensionContext) {
+    // 1. Cleanup Old Instance
+    if (syncManager) {
+        syncManager.stopWatch();
+        syncManager.removeAllListeners();
+    }
+
     const config = vscode.workspace.getConfiguration('n8n');
     const host = config.get<string>('host') || process.env.N8N_HOST || '';
     const apiKey = config.get<string>('apiKey') || process.env.N8N_API_KEY || '';
@@ -310,6 +308,9 @@ async function initializeSyncManager(context: vscode.ExtensionContext) {
         syncInactive: true,
         ignoredTags: []
     });
+
+    // Pass syncManager to tree provider
+    treeProvider.setSyncManager(syncManager);
 
     // Wire up logs
     syncManager.on('error', (msg) => console.error(msg));
