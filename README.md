@@ -74,6 +74,20 @@ Nous injectons du contexte spécifique pour rendre votre IA (Cursor, Windsurf, C
 
 ---
 
+## 🛠️ Développement et Tests Locaux
+
+Mode Debug (F5) depuis packages\vscode-extension
+
+ou
+
+Utilisez la commande suivante à la racine pour compiler, packager et installer l'extension localement dans votre instance principale de VS Code :
+
+```bash
+npm run extension:install
+```
+
+---
+
 ## 🏗 Architecture (Monorepo)
 
 -   **`packages/core`** : Coeur logique (API, Sync, Sanitization).

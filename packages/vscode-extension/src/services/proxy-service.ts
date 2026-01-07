@@ -9,10 +9,15 @@ export class ProxyService {
     private port: number = 0;
     private target: string = '';
     private outputChannel: vscode.OutputChannel | undefined;
+    private secrets: vscode.SecretStorage | undefined;
 
     private cookieJar = new Map<string, string>();
 
     constructor() { }
+
+    public setSecrets(secrets: vscode.SecretStorage) {
+        this.secrets = secrets;
+    }
 
     public setOutputChannel(channel: vscode.OutputChannel) {
         this.outputChannel = channel;
@@ -23,6 +28,38 @@ export class ProxyService {
             this.outputChannel.appendLine(message);
         } else {
             console.log(message);
+        }
+    }
+
+    private getStorageKey(): string {
+        // Use a base64 encoded version of the target URL to avoid issues with special characters in keys
+        return `n8n-cookies-${Buffer.from(this.target).toString('base64')}`;
+    }
+
+    private async saveCookies() {
+        if (!this.secrets || !this.target) return;
+        try {
+            const cookies = Array.from(this.cookieJar.entries());
+            await this.secrets.store(this.getStorageKey(), JSON.stringify(cookies));
+            // this.log(`[Proxy] Cookies persisted for ${this.target}`);
+        } catch (e: any) {
+            this.log(`[Proxy] Error persisting cookies: ${e.message}`);
+        }
+    }
+
+    private async loadCookies() {
+        if (!this.secrets || !this.target) return;
+        try {
+            const stored = await this.secrets.get(this.getStorageKey());
+            if (stored) {
+                const cookies: [string, string][] = JSON.parse(stored);
+                for (const [key, value] of cookies) {
+                    this.cookieJar.set(key, value);
+                }
+                this.log(`[Proxy] Loaded ${this.cookieJar.size} persisted cookies for ${this.target}`);
+            }
+        } catch (e: any) {
+            this.log(`[Proxy] Error loading persisted cookies: ${e.message}`);
         }
     }
 
@@ -38,6 +75,9 @@ export class ProxyService {
         this.cookieJar.clear();
         // Ensure targetUrl doesn't have trailing slash for consistency
         this.target = targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl;
+
+        // Load persisted cookies
+        await this.loadCookies();
 
         this.proxy = httpProxy.createProxyServer({
             target: targetUrl,
@@ -92,6 +132,9 @@ export class ProxyService {
                             this.log(`[Proxy] Captured session cookie: ${key}`);
                         }
                     }
+
+                    // Save cookies whenever we get new ones
+                    this.saveCookies();
 
                     // For localhost proxy, we need to:
                     // 1. Remove Domain so cookie applies to localhost

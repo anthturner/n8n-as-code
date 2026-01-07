@@ -23,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Pass output channel to proxy service
     proxyService.setOutputChannel(outputChannel);
+    proxyService.setSecrets(context.secrets);
 
     // 1. Initial Setup
     await initializeSyncManager(context);
