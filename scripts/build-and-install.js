@@ -29,11 +29,7 @@ try {
     });
 
     console.log('\n✅ Extension installed successfully!');
-    console.log('💡 To test the SecretStorage persistence:');
-    console.log('   1. Open a regular VS Code window (not the extension host)');
-    console.log('   2. Authenticate in the n8n Webview');
-    console.log('   3. Close VS Code completely');
-    console.log('   4. Reopen VS Code and verify you are still logged in\n');
+    console.log('💡 To apply changes Reload VS Code (via Command Palette "Reload Window" or your custom shortcut');
 
 } catch (error) {
     console.error('\n❌ Error during build and install process:');
