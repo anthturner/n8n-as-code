@@ -19,11 +19,11 @@ Prêt à synchroniser vos workflows en moins de 2 minutes ?
     ```
 
     > **Note** : La commande `npm link` permet de créer un lien global vers le CLI, vous permettant d'utiliser `n8n-as-code` directement depuis n'importe quel terminal.
-2.  **Configuration** : Créez un fichier `.env` à la racine :
-    ```env
-    N8N_HOST=https://votre-instance.n8n.cloud
-    N8N_API_KEY=votre_cle_api
+2.  **Configuration** :
+    ```bash
+    n8n-as-code init
     ```
+    > **Note** : L'assistant vous guidera pour configurer votre instance n8n et stockera votre clé d'API de manière sécurisée hors de votre projet.
 3.  **Sync initial** : Téléchargez vos workflows existants :
     ```bash
     n8n-as-code pull
@@ -44,22 +44,31 @@ L'extension transforme VS Code en un véritable IDE pour n8n.
 
 ---
 
+## ⚙️ Configuration
+
+Le CLI utilise un système de configuration interactif et sécurisé via la commande `init`.
+
+### Fichiers de configuration
+- **`n8n-as-code.json`** : Contient les réglages du projet (Host, dossiers, etc.). Ce fichier est créé à la racine et peut être partagé via Git.
+- **Stockage Global** : Vos clés d'API sont liées à l'hôte et stockées localement sur votre machine par le système, jamais commitées.
+
+---
+
 ## 🛠 CLI Commands (`@n8n-as-code/cli`)
 
-Pour ceux qui préfèrent le terminal ou l'automatisation.
+Pour ceux qui préfèrent le terminal ou l'automatisation. Les commandes sont accessibles via `n8n-as-code`.
 
+-   **`init`** : Configure votre instance n8n et votre projet local.
 -   **`pull`** : Récupère tous les workflows depuis n8n.
 -   **`push`** : Envoie les nouveaux fichiers locaux vers n8n.
 -   **`watch`** : Mode synchronisation bidirectionnelle en temps réel.
--   **`init-ai`** : Génère manuellement le contexte pour votre agent IA.
+-   **`init-ai`** : Génère le contexte pour votre agent IA.
 
-Pour utiliser ces commandes, utilisez simplement `n8n-as-code <command>`. Par exemple :
-
+Exemple d'utilisation :
 ```bash
+n8n-as-code init
 n8n-as-code pull
-n8n-as-code push
 n8n-as-code watch
-n8n-as-code init-ai
 ```
 
 ---

@@ -94,7 +94,7 @@ Couche UI fine par-dessus le Core.
 ## 2. Interface CLI (`packages/cli`)
 Pour CI/CD et utilisateurs Vim.
 
-* **`n8n sync watch`** : Processus persistant (Chokidar + Polling).
+* **`n8n-as-code watch`** : Processus persistant (Chokidar + Polling).
 * **Feedback Visuel :** Spinners (Ora) et Couleurs (Chalk).
 
 ---
@@ -116,7 +116,7 @@ Pour CI/CD et utilisateurs Vim.
 
 ### Phase 3 : Création du CLI
 - [ ] Initialiser `packages/cli`.
-- [ ] Créer commande test `n8n sync status`.
+- [ ] Créer commande test `n8n-as-code status`.
 
 ### Phase 4 : Connexion Extension
 - [ ] Déplacer code extension existant vers `packages/vscode-extension`.

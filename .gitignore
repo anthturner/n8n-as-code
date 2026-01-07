@@ -52,3 +52,5 @@ AGENTS.md
 n8n-schema.json
 .cursorrules
 .clinerules
+
+n8n-as-code.json

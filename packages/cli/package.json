@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "description": "CLI for n8n-as-code ecosystem",
     "bin": {
-        "n8n-sync": "./dist/index.js"
+        "n8n-as-code": "./dist/index.js"
     },
     "scripts": {
         "build": "tsc -b",
@@ -11,13 +11,16 @@
     },
     "dependencies": {
         "@n8n-as-code/core": "^1.0.0",
-        "commander": "^11.1.0",
         "chalk": "^5.3.0",
-        "ora": "^7.0.1",
         "chokidar": "^3.5.3",
-        "dotenv": "^16.3.1"
+        "commander": "^11.1.0",
+        "conf": "^15.0.2",
+        "dotenv": "^16.3.1",
+        "inquirer": "^13.1.0",
+        "ora": "^7.0.1"
     },
     "devDependencies": {
+        "@types/inquirer": "^9.0.9",
         "typescript": "^5.3.3"
     }
 }

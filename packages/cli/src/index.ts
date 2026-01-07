@@ -3,14 +3,21 @@ import { Command } from 'commander';
 import { WatchCommand } from './commands/watch.js';
 import { SyncCommand } from './commands/sync.js';
 import { InitAiCommand } from './commands/init-ai.js';
+import { InitCommand } from './commands/init.js';
 import chalk from 'chalk';
 
 const program = new Command();
 
 program
-    .name('n8n-sync')
+    .name('n8n-as-code')
     .description('CLI to synchronize n8n workflows with local files')
     .version('1.0.0');
+
+program.command('init')
+    .description('Configure your n8n instance and local project')
+    .action(async () => {
+        await new InitCommand().run();
+    });
 
 program.command('watch')
     .description('Start bi-directional synchronization in real-time')
