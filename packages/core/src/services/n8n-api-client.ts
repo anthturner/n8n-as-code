@@ -5,8 +5,13 @@ export class N8nApiClient {
     private client: AxiosInstance;
 
     constructor(credentials: IN8nCredentials) {
+        let host = credentials.host;
+        if (host.endsWith('/')) {
+            host = host.slice(0, -1);
+        }
+
         this.client = axios.create({
-            baseURL: credentials.host,
+            baseURL: host,
             headers: {
                 'X-N8N-API-KEY': credentials.apiKey,
                 'Content-Type': 'application/json'

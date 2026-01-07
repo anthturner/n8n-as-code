@@ -70,8 +70,7 @@ export async function activate(context: vscode.ExtensionContext) {
             const wf = arg?.workflow ? arg.workflow : arg;
             if (!wf) return;
 
-            const config = vscode.workspace.getConfiguration('n8n');
-            const host = config.get<string>('host') || process.env.N8N_HOST || '';
+            const { host } = getN8nConfig();
 
             outputChannel.appendLine(`[n8n] Opening board for workflow: ${wf.name} (${wf.id})`);
             outputChannel.appendLine(`[n8n] Host configured: ${host}`);
@@ -116,8 +115,7 @@ export async function activate(context: vscode.ExtensionContext) {
             const wf = arg?.workflow ? arg.workflow : arg;
             if (!wf || !syncManager) return;
 
-            const config = vscode.workspace.getConfiguration('n8n');
-            const host = config.get<string>('host') || process.env.N8N_HOST || '';
+            const { host } = getN8nConfig();
 
             // 1. Open JSON in left column
             if (wf.filename) {
@@ -194,9 +192,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             if (!syncManager) await initializeSyncManager(context);
 
-            const config = vscode.workspace.getConfiguration('n8n');
-            const host = config.get<string>('host') || process.env.N8N_HOST || '';
-            const apiKey = config.get<string>('apiKey') || process.env.N8N_API_KEY || '';
+            const { host, apiKey } = getN8nConfig();
 
             if (!host || !apiKey) {
                 if (!options?.silent) vscode.window.showErrorMessage('n8n: Host/API Key missing. Cannot initialize AI context.');
@@ -271,6 +267,22 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 }
 
+/**
+ * Helper to get normalized n8n configuration
+ */
+function getN8nConfig(): { host: string, apiKey: string } {
+    const config = vscode.workspace.getConfiguration('n8n');
+    let host = config.get<string>('host') || process.env.N8N_HOST || '';
+    const apiKey = config.get<string>('apiKey') || process.env.N8N_API_KEY || '';
+
+    // Normalize: remove trailing slash
+    if (host.endsWith('/')) {
+        host = host.slice(0, -1);
+    }
+
+    return { host, apiKey };
+}
+
 async function initializeSyncManager(context: vscode.ExtensionContext) {
     // 1. Cleanup Old Instance
     if (syncManager) {
@@ -278,9 +290,8 @@ async function initializeSyncManager(context: vscode.ExtensionContext) {
         syncManager.removeAllListeners();
     }
 
+    const { host, apiKey } = getN8nConfig();
     const config = vscode.workspace.getConfiguration('n8n');
-    const host = config.get<string>('host') || process.env.N8N_HOST || '';
-    const apiKey = config.get<string>('apiKey') || process.env.N8N_API_KEY || '';
     const folder = config.get<string>('syncFolder') || 'workflows';
     const pollIntervalMs = config.get<number>('pollInterval') || 3000;
 
