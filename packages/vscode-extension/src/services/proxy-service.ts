@@ -36,6 +36,19 @@ export class ProxyService {
         return `n8n-cookies-${Buffer.from(this.target).toString('base64')}`;
     }
 
+    /**
+     * Generate a stable port number between 10000 and 60000 based on the target URL
+     */
+    private getStablePort(targetUrl: string): number {
+        let hash = 0;
+        for (let i = 0; i < targetUrl.length; i++) {
+            const char = targetUrl.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return 10000 + (Math.abs(hash) % 50000);
+    }
+
     private async saveCookies() {
         if (!this.secrets || !this.target) return;
         try {
@@ -64,8 +77,12 @@ export class ProxyService {
     }
 
     public async start(targetUrl: string): Promise<string> {
+        // Ensure targetUrl doesn't have trailing slash for consistency
+        const normalizedTarget = targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl;
+        const stablePort = this.getStablePort(normalizedTarget);
+
         if (this.server) {
-            if (this.target === targetUrl) {
+            if (this.target === normalizedTarget && this.port === stablePort) {
                 return `http://localhost:${this.port}`;
             }
             this.stop();
@@ -73,14 +90,14 @@ export class ProxyService {
 
         // Reset state
         this.cookieJar.clear();
-        // Ensure targetUrl doesn't have trailing slash for consistency
-        this.target = targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl;
+        this.target = normalizedTarget;
+        this.port = stablePort;
 
         // Load persisted cookies
         await this.loadCookies();
 
         this.proxy = httpProxy.createProxyServer({
-            target: targetUrl,
+            target: this.target,
             changeOrigin: true,
             secure: false,
             cookieDomainRewrite: "", // Rewrite all domains to match localhost
@@ -206,6 +223,8 @@ export class ProxyService {
                 const targetIsHttps = this.target.startsWith('https');
                 const proto = targetIsHttps ? 'https' : 'http';
 
+                // IMPORTANT: Use consistent headers to avoid session invalidation
+                req.headers['host'] = proxyHost;
                 req.headers['x-forwarded-host'] = proxyHost;
                 req.headers['x-forwarded-proto'] = proto;
                 req.headers['x-forwarded-port'] = this.port.toString();
@@ -234,15 +253,32 @@ export class ProxyService {
         return new Promise((resolve, reject) => {
             if (!this.server) return reject(new Error('Server not initialized'));
 
-            this.server.listen(0, 'localhost', () => {
-                const address = this.server?.address() as AddressInfo;
-                this.port = address.port;
+            // Try to listen on the stable port
+            this.server.listen(this.port, 'localhost', () => {
                 const proxyUrl = `http://localhost:${this.port}`;
-                this.log(`🟢 [Proxy] Server started successfully!`);
+                this.log(`🟢 [Proxy] Server started successfully on stable port!`);
                 this.log(`   Local: ${proxyUrl}`);
                 this.log(`   Target: ${this.target}`);
                 this.log(`   Ready to proxy n8n requests`);
                 resolve(proxyUrl);
+            });
+
+            // If the stable port is taken, fallback to random port (less ideal for persistence but allows proxy to work)
+            this.server.on('error', (err: any) => {
+                if (err.code === 'EADDRINUSE') {
+                    this.log(`⚠️ [Proxy] Port ${this.port} is in use, falling back to random port...`);
+                    this.server?.close();
+                    this.server = http.createServer(this.server?.listeners('request')[0] as any);
+                    this.server.listen(0, 'localhost', () => {
+                        const address = this.server?.address() as AddressInfo;
+                        this.port = address.port;
+                        const proxyUrl = `http://localhost:${this.port}`;
+                        this.log(`🟡 [Proxy] Server started on fallback port: ${this.port}`);
+                        resolve(proxyUrl);
+                    });
+                } else {
+                    reject(err);
+                }
             });
 
             // Proxy WebSockets for real-time features
