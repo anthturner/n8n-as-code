@@ -1,4 +1,4 @@
-# 🚀 n8n-as-code
+# <img src="res/logo.png" alt="n8n-as-code logo" width="32" height="32"> n8n-as-code
 
 [![CI](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/ci.yml/badge.svg)](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/ci.yml)
 [![Documentation](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/docs.yml/badge.svg)](https://etiennelescot.github.io/n8n-as-code/)
@@ -7,9 +7,13 @@
 [![npm: skills](https://img.shields.io/npm/v/@n8n-as-code/skills?label=skills&logo=npm)](https://www.npmjs.com/package/@n8n-as-code/skills)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<div align="center">
+  <img src="res/n8n-as-code.gif" alt="n8n-as-code demo" width="800">
+</div>
+
 **Manage your n8n workflows as code.** Version control with Git, AI-assisted editing, and seamless VS Code integration.
 
-📖 **[Full Documentation](https://etiennelescot.github.io/n8n-as-code/)** | 🚀 **[Getting Started Guide](https://etiennelescot.github.io/n8n-as-code/docs/getting-started)**
+📖 **[Full Documentation](https://etiennelescot.github.io/n8n-as-code/)** | **[Getting Started Guide](https://etiennelescot.github.io/n8n-as-code/docs/getting-started)**
 
 ---
 

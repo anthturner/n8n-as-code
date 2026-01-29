@@ -1,8 +1,8 @@
-# @n8n-as-code/cli
+# <img src="https://raw.githubusercontent.com/EtienneLescot/n8n-as-code/main/res/logo.png" alt="n8n-as-code logo" width="32" height="32"> @n8n-as-code/cli
 
 The main command-line interface for the **n8n-as-code** ecosystem. Manage, synchronize, and version control your n8n workflows locally.
 
-## 🚀 Installation
+## Installation
 
 ```bash
 npm install -g @n8n-as-code/cli

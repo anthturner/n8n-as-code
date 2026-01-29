@@ -1,4 +1,4 @@
-# @n8n-as-code/skills
+# <img src="https://raw.githubusercontent.com/EtienneLescot/n8n-as-code/main/res/logo.png" alt="n8n-as-code logo" width="32" height="32"> @n8n-as-code/skills
 
 Specialized tooling for AI Agents (Cursor, Cline, Copilot) to interact with n8n workflows and nodes.
 
@@ -9,7 +9,7 @@ This package provides a dedicated CLI (`n8nac-skills`) and programmatic tools de
 2. **Search Nodes**: Find specific n8n nodes and their properties.
 3. **Initialize Context**: Bootstrap developer environments with `AGENTS.md`, JSON schemas, and snippets.
 
-## 🚀 Installation
+## Installation
 
 ```bash
 npm install @n8n-as-code/skills
@@ -17,7 +17,7 @@ npm install @n8n-as-code/skills
 
 ## 📖 CLI Usage
 
-### `search <query>` - 🚀 Deep Unified Search (PRIMARY TOOL)
+### `search <query>` - Deep Unified Search (PRIMARY TOOL)
 
 **Deep Full-Text Search with Smart Keyword Matching** across 600+ nodes and 1240+ documentation pages.
 Optimized for natural language queries, technical terms, and capabilities (e.g., "image generation" finds Google Gemini).

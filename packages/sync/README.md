@@ -1,4 +1,4 @@
-# @n8n-as-code/sync
+# <img src="https://raw.githubusercontent.com/EtienneLescot/n8n-as-code/main/res/logo.png" alt="n8n-as-code logo" width="32" height="32"> @n8n-as-code/sync
 
 The logical sync of the **n8n-as-code** ecosystem.
 
@@ -10,7 +10,7 @@ This package contains the shared logic used by the CLI, the Skills CLI, and the 
 - **Sanitization**: Cleaning up n8n JSONs for better Git versioning (removing IDs, timestamps, etc.).
 - **State Management**: Tracking local vs. remote state to detect conflicts.
 
-## 🚀 Usage
+## Usage
 
 This is internal tooling primarily intended to be consumed by other `@n8n-as-code` packages.
 

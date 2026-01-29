@@ -1,4 +1,4 @@
-# CLI Test Suite
+# <img src="https://raw.githubusercontent.com/EtienneLescot/n8n-as-code/main/res/logo.png" alt="n8n-as-code logo" width="32" height="32"> CLI Test Suite
 
 Comprehensive test suite for the n8n-as-code CLI package using **Vitest**.
 
@@ -84,7 +84,7 @@ Provides mock implementations for testing:
 - `fixtures/sample-workflow.json`: Sample workflow for testing
 - `fixtures/sample-config.json`: Sample config for testing
 
-## 🚀 Running Tests
+## Running Tests
 
 ### Install dependencies
 ```bash
