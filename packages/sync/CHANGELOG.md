@@ -1,5 +1,11 @@
 # @n8n-as-code/sync
 
+## 0.8.0
+
+### Minor Changes
+
+- fix projects for self hosted instances
+
 ## 0.7.0
 
 ### Minor Changes

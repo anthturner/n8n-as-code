@@ -97,6 +97,50 @@ export class N8nApiClient {
                 updatedAt: p.updatedAt
             }));
         } catch (error: any) {
+            // Check if this is a license restriction error (common on local n8n instances)
+            const isLicenseError = error.response?.status === 403 &&
+                error.response?.data?.message?.includes('license') ||
+                error.response?.data?.message?.includes('feat:projectRole:admin');
+            
+            if (isLicenseError) {
+                console.warn(`[N8nApiClient] Projects API requires license upgrade. Using personal project fallback.`);
+                
+                // Try to get the personal project ID from existing workflows
+                try {
+                    const workflowsRes = await this.client.get('/api/v1/workflows');
+                    const workflows = workflowsRes.data.data || [];
+                    
+                    // Find a project ID from workflow shared data
+                    for (const wf of workflows) {
+                        if (wf.shared && Array.isArray(wf.shared) && wf.shared.length > 0) {
+                            const projectId = wf.shared[0].projectId;
+                            if (projectId) {
+                                console.debug(`[N8nApiClient] Found personal project ID from workflows: ${projectId}`);
+                                return [{
+                                    id: projectId,
+                                    name: 'Personal',
+                                    type: 'personal',
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString()
+                                }];
+                            }
+                        }
+                    }
+                } catch (innerError: any) {
+                    console.debug(`[N8nApiClient] Could not fetch workflows to discover project ID: ${innerError.message}`);
+                }
+                
+                // Fallback: return a placeholder personal project
+                console.warn(`[N8nApiClient] No workflows found, using placeholder personal project ID`);
+                return [{
+                    id: 'personal',
+                    name: 'Personal',
+                    type: 'personal',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                }];
+            }
+            
             console.error(`[N8nApiClient] Failed to fetch projects: ${error.message}`);
             return [];
         }
@@ -137,6 +181,54 @@ export class N8nApiClient {
             }
             return this.projectsCache;
         } catch (error: any) {
+            // Check if this is a license restriction error (common on local n8n instances)
+            const isLicenseError = error.response?.status === 403 &&
+                error.response?.data?.message?.includes('license') ||
+                error.response?.data?.message?.includes('feat:projectRole:admin');
+            
+            if (isLicenseError) {
+                console.warn(`[N8nApiClient] Projects API requires license upgrade. Using personal project fallback in cache.`);
+                
+                // Try to get the personal project ID from existing workflows
+                try {
+                    const workflowsRes = await this.client.get('/api/v1/workflows');
+                    const workflows = workflowsRes.data.data || [];
+                    
+                    // Find a project ID from workflow shared data
+                    for (const wf of workflows) {
+                        if (wf.shared && Array.isArray(wf.shared) && wf.shared.length > 0) {
+                            const projectId = wf.shared[0].projectId;
+                            if (projectId) {
+                                console.debug(`[N8nApiClient] Found personal project ID from workflows for cache: ${projectId}`);
+                                this.projectsCache = new Map();
+                                this.projectsCache.set(projectId, {
+                                    id: projectId,
+                                    name: 'Personal',
+                                    type: 'personal',
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString()
+                                });
+                                return this.projectsCache;
+                            }
+                        }
+                    }
+                } catch (innerError: any) {
+                    console.debug(`[N8nApiClient] Could not fetch workflows to discover project ID for cache: ${innerError.message}`);
+                }
+                
+                // Fallback: create a placeholder personal project
+                console.warn(`[N8nApiClient] No workflows found, using placeholder personal project ID in cache`);
+                this.projectsCache = new Map();
+                this.projectsCache.set('personal', {
+                    id: 'personal',
+                    name: 'Personal',
+                    type: 'personal',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+                return this.projectsCache;
+            }
+            
             // Graceful degradation: workflows will have projectId but no homeProject/projectName
             console.warn(`[N8nApiClient] Failed to fetch projects: ${error.message}. Workflows will not have project names.`);
             this.projectsCache = new Map();
