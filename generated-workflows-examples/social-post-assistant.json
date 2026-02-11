@@ -1915,7 +1915,13 @@
     },
     "💭 Discord: Génération": {
       "main": [
-        []
+        [
+          {
+            "node": "post brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "✍️ Agent Rédacteur": {
