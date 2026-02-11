@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "sourceHost": "http://localhost:5678",
+  "totalFetched": 2,
+  "totalCustom": 1,
+  "nodes": {
+    "acme-nodes.customAnalytics": {
+      "name": "customAnalytics",
+      "type": "acme-nodes.customAnalytics",
+      "displayName": "Custom Analytics",
+      "description": "Run custom analytics operations",
+      "version": 1,
+      "group": [
+        "custom"
+      ],
+      "schema": {
+        "properties": [
+          {
+            "displayName": "Dataset",
+            "name": "dataset",
+            "type": "string",
+            "default": ""
+          }
+        ],
+        "sourcePath": "remote:http://localhost:5678"
+      },
+      "metadata": {
+        "keywords": [
+          "custom",
+          "analytics"
+        ],
+        "operations": [],
+        "useCases": [],
+        "keywordScore": 20,
+        "hasDocumentation": false,
+        "markdownUrl": null,
+        "markdownFile": null,
+        "source": "remote-custom",
+        "fetchedFrom": "http://localhost:5678",
+        "fetchedAt": "2026-01-01T00:00:00.000Z"
+      }
+    }
+  }
+}

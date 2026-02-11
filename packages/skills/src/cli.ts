@@ -7,6 +7,7 @@ import { DocsProvider } from './services/docs-provider.js';
 import { KnowledgeSearch } from './services/knowledge-search.js';
 import { AiContextGenerator } from './services/ai-context-generator.js';
 import { SnippetGenerator } from './services/snippet-generator.js';
+import { RemoteCustomNodeIndexer } from './services/remote-custom-node-indexer.js';
 import { registerWorkflowsCommand } from './commands/workflows.js';
 import fs, { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -51,6 +52,7 @@ const program = new Command();
 const provider = new NodeSchemaProvider(join(assetsDir, 'n8n-nodes-technical.json'));
 const docsProvider = new DocsProvider(join(assetsDir, 'n8n-docs-complete.json'));
 const knowledgeSearch = new KnowledgeSearch(join(assetsDir, 'n8n-knowledge-index.json'));
+const remoteIndexer = new RemoteCustomNodeIndexer(assetsDir);
 
 program
     .name('n8nac-skills')
@@ -377,6 +379,41 @@ program
             await snippetGen.generate(projectRoot);
 
             console.error(chalk.green('✅ AI Context updated successfully!'));
+        } catch (error: any) {
+            console.error(chalk.red(error.message));
+            process.exit(1);
+        }
+    });
+
+// 10. Remote custom nodes index refresh
+program
+    .command('index-remote-nodes')
+    .description('Refresh cached custom nodes from the configured n8n instance API')
+    .option('--force', 'Ignore cache freshness and refresh now')
+    .option('--clear-cache', 'Delete existing cache before refreshing')
+    .option('--max-age-ms <ms>', 'Cache max age in milliseconds before refresh', '300000')
+    .action(async (options) => {
+        try {
+            const result = await remoteIndexer.refresh({
+                force: !!options.force,
+                clearCacheBeforeRefresh: !!options.clearCache,
+                maxAgeMs: parseInt(options.maxAgeMs, 10)
+            });
+
+            console.log(JSON.stringify({
+                status: result.status,
+                sourceHost: result.sourceHost,
+                generatedAt: result.generatedAt,
+                totalFetched: result.totalFetched,
+                totalCustom: result.totalCustom,
+                cachePath: result.cachePath
+            }, null, 2));
+
+            if (result.status === 'cached') {
+                console.error(chalk.gray('ℹ️  Using fresh cached remote custom-node index.'));
+            } else {
+                console.error(chalk.green('✅ Remote custom-node cache refreshed.'));
+            }
         } catch (error: any) {
             console.error(chalk.red(error.message));
             process.exit(1);

@@ -27,11 +27,13 @@ describe('Search Intelligence Integration', () => {
         // BUT the fixture filename is 'n8n-nodes-technical.json' which matches the expected name.
 
         process.env.N8N_AS_CODE_ASSETS_DIR = path.resolve(_dirname, 'fixtures');
+        process.env.N8N_AS_CODE_REMOTE_CUSTOM_NODES_PATH = path.resolve(_dirname, 'fixtures/n8n-remote-custom-nodes.json');
         search = new KnowledgeSearch();
     });
 
     afterAll(() => {
         delete process.env.N8N_AS_CODE_ASSETS_DIR;
+        delete process.env.N8N_AS_CODE_REMOTE_CUSTOM_NODES_PATH;
     });
 
     it('should find Google Gemini for "image generation"', () => {
@@ -67,5 +69,11 @@ describe('Search Intelligence Integration', () => {
 
         expect(keywords).toContain('generate');
         expect(keywords).toContain('image');
+    });
+
+    it('should include cached remote custom nodes in unified search', () => {
+        const results = search.searchAll('custom analytics', { type: 'node' });
+        const custom = results.results.find(r => r.name === 'customAnalytics' || r.id === 'customAnalytics');
+        expect(custom).toBeDefined();
     });
 });

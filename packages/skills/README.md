@@ -164,6 +164,31 @@ n8nac-skills update-ai
 n8nac-skills update-ai --version 1.70.0
 ```
 
+### `index-remote-nodes` - 🧩 Cache Custom Nodes From Your n8n Instance
+Refresh a local cache of **custom** nodes from your configured n8n instance API (`/rest/node-types`).
+
+This command is **hybrid-friendly**:
+- refreshes on-demand,
+- keeps a cache on disk,
+- and normal `search/get/schema/list` commands automatically use the cache when present.
+
+Curated official metadata remains source-of-truth and is never overwritten.
+
+```bash
+# Refresh using cache freshness policy (default max age: 5 min)
+n8nac-skills index-remote-nodes
+
+# Force refresh now
+n8nac-skills index-remote-nodes --force
+
+# Clear cache then refresh
+n8nac-skills index-remote-nodes --clear-cache --force
+```
+
+Credential resolution follows the same strategy as the VS Code extension:
+1. `.vscode/settings.json` (`n8n.host`, `n8n.apiKey`)
+2. Environment fallback (`N8N_HOST`, `N8N_API_KEY`)
+
 ## 📁 Data Source
 
 The Skills CLI uses a pre-generated index of n8n nodes from the official n8n source code. The data is stored in `dist/assets/` (generated during build):
@@ -171,6 +196,7 @@ The Skills CLI uses a pre-generated index of n8n nodes from the official n8n sou
 - `n8n-knowledge-index.json`: Unified FlexSearch index for the `search` command.
 - `n8n-nodes-technical.json`: Detailed technical schemas for the `get` command.
 - `n8n-docs-complete.json`: Full documentation content.
+- `n8n-remote-custom-nodes.json`: On-demand cache of custom nodes fetched from your configured n8n instance.
 
 ## 🧩 Integration
 

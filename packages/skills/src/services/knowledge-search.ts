@@ -155,6 +155,33 @@ export class KnowledgeSearch {
             }
         }
 
+        // Include provider fallback (contains merged curated + cached remote custom nodes)
+        if (!options.type || options.type === 'node') {
+            const providerNodes = this.nodeProvider.searchNodes(query, (options.limit || 20) * 2);
+            for (const node of providerNodes) {
+                const uniqueId = `node:${node.name}`;
+                if (seenIds.has(uniqueId)) continue;
+                const full = this.nodeProvider.getNodeSchema(node.name);
+                const nodeCategory = full?.group?.[0] || 'integration';
+                if (options.category) {
+                    if (nodeCategory !== options.category) continue;
+                }
+
+                seenIds.add(uniqueId);
+                results.push({
+                    type: 'node',
+                    id: node.name,
+                    name: node.name,
+                    displayName: node.displayName,
+                    description: node.description,
+                    excerpt: node.description,
+                    score: Math.max(1, Math.round((node.relevanceScore || 0) / 100)),
+                    category: nodeCategory,
+                    relevance: (node.relevanceScore || 0) > 800 ? 'exact_match' : 'related'
+                });
+            }
+        }
+
         // If no results from FlexSearch, fallback to basic full-text search in docs (Deep Search)
         if (results.length === 0) {
             const deepResults = this.docsProvider.searchDocs(query, { limit: options.limit });

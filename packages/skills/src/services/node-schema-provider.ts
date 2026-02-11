@@ -46,12 +46,24 @@ export interface IEnrichedNode {
     };
 }
 
+export interface INodeProviderOptions {
+    includeRemoteCustomNodes?: boolean;
+    remoteCustomNodesPath?: string;
+}
+
+interface IRemoteCustomNodesCache {
+    nodes?: Record<string, any>;
+}
+
 export class NodeSchemaProvider {
     private index: any = null;
     private enrichedIndex: any = null;
     private enrichedIndexPath: string;
+    private includeRemoteCustomNodes: boolean;
+    private remoteCustomNodesPath: string;
+    private remoteCustomNodes: Record<string, any> | null = null;
 
-    constructor(customIndexPath?: string) {
+    constructor(customIndexPath?: string, options: INodeProviderOptions = {}) {
         const envAssetsDir = process.env.N8N_AS_CODE_ASSETS_DIR;
         if (customIndexPath) {
             this.enrichedIndexPath = customIndexPath;
@@ -65,6 +77,10 @@ export class NodeSchemaProvider {
                 this.enrichedIndexPath = path.resolve(_dirname, '../../assets/n8n-nodes-technical.json');
             }
         }
+
+        this.includeRemoteCustomNodes = options.includeRemoteCustomNodes ?? true;
+        const envRemotePath = process.env.N8N_AS_CODE_REMOTE_CUSTOM_NODES_PATH;
+        this.remoteCustomNodesPath = options.remoteCustomNodesPath || envRemotePath || path.join(path.dirname(this.enrichedIndexPath), 'n8n-remote-custom-nodes.json');
     }
 
 
@@ -91,12 +107,68 @@ export class NodeSchemaProvider {
         }
     }
 
+    private loadRemoteCustomNodes() {
+        if (!this.includeRemoteCustomNodes) {
+            this.remoteCustomNodes = {};
+            return;
+        }
+
+        if (this.remoteCustomNodes !== null) {
+            return;
+        }
+
+        if (!fs.existsSync(this.remoteCustomNodesPath)) {
+            this.remoteCustomNodes = {};
+            return;
+        }
+
+        try {
+            const content = fs.readFileSync(this.remoteCustomNodesPath, 'utf-8');
+            const parsed = JSON.parse(content) as IRemoteCustomNodesCache;
+            this.remoteCustomNodes = parsed?.nodes && typeof parsed.nodes === 'object' ? parsed.nodes : {};
+        } catch {
+            this.remoteCustomNodes = {};
+        }
+    }
+
+    private getMergedNodes(): Record<string, any> {
+        this.loadIndex();
+        this.loadRemoteCustomNodes();
+
+        const merged: Record<string, any> = { ...this.index.nodes };
+        const curatedEntries = Object.entries<any>(this.index.nodes);
+
+        for (const remoteNode of Object.values<any>(this.remoteCustomNodes || {})) {
+            const remoteType = (remoteNode?.type || '').toString().toLowerCase();
+            const remoteName = (remoteNode?.name || remoteNode?.type || '').toString().toLowerCase();
+
+            const overlapsCurated = curatedEntries.some(([curatedKey, curatedNode]) => {
+                const curatedType = (curatedNode?.type || curatedNode?.name || curatedKey).toString().toLowerCase();
+                const curatedName = (curatedNode?.name || curatedKey).toString().toLowerCase();
+
+                return (remoteType && curatedType === remoteType) || (remoteName && curatedName === remoteName);
+            });
+
+            if (overlapsCurated) {
+                continue;
+            }
+
+            const mergeKey = remoteNode?.name || remoteNode?.type;
+            if (mergeKey && !merged[mergeKey]) {
+                merged[mergeKey] = remoteNode;
+            }
+        }
+
+        return merged;
+    }
+
     /**
      * Get the full JSON schema for a specific node by name.
      * Returns null if not found.
      */
     public getNodeSchema(nodeName: string): any | null {
         this.loadIndex();
+        this.loadRemoteCustomNodes();
 
         // Direct match
         if (this.index.nodes[nodeName]) {
@@ -118,7 +190,21 @@ export class NodeSchemaProvider {
         const lowerName = nodeName.toLowerCase();
         const found = Object.keys(this.index.nodes).find(k => k.toLowerCase() === lowerName);
 
-        return found ? this.index.nodes[found] : null;
+        if (found) {
+            return this.index.nodes[found];
+        }
+
+        for (const [key, remoteNode] of Object.entries<any>(this.remoteCustomNodes || {})) {
+            const remoteType = (remoteNode?.type || key).toString().toLowerCase();
+            const remoteName = (remoteNode?.name || key).toString().toLowerCase();
+            const remoteDisplayName = (remoteNode?.displayName || '').toString().toLowerCase();
+
+            if (remoteType === lowerName || remoteName === lowerName || remoteDisplayName === lowerName) {
+                return remoteNode;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -141,6 +227,14 @@ export class NodeSchemaProvider {
             score += 800;
         } else if (displayName.includes(lowerQuery)) {
             score += 400;
+        }
+
+        // Node type match
+        const nodeType = (node.type || '').toLowerCase();
+        if (nodeType === lowerQuery) {
+            score += 900;
+        } else if (nodeType.includes(lowerQuery)) {
+            score += 250;
         }
 
         // Keyword match (from enriched metadata)
@@ -179,7 +273,9 @@ export class NodeSchemaProvider {
         }
 
         // Bonus for nodes with high keyword scores (AI/popular nodes)
-        if (node.metadata?.keywordScore) {
+        // Apply only when there is already at least one semantic match,
+        // otherwise unrelated nodes can appear for arbitrary queries.
+        if (score > 0 && node.metadata?.keywordScore) {
             score += node.metadata.keywordScore * 0.5;
         }
 
@@ -209,11 +305,11 @@ export class NodeSchemaProvider {
      * Returns a list of matches (stub only, not full schema).
      */
     public searchNodes(query: string, limit: number = 20): INodeSchemaStub[] {
-        this.loadIndex();
+        const nodes = this.getMergedNodes();
         const lowerQuery = query.toLowerCase();
         const scoredResults: Array<INodeSchemaStub & { score: number }> = [];
 
-        for (const [key, node] of Object.entries<any>(this.index.nodes)) {
+        for (const [key, node] of Object.entries<any>(nodes)) {
             const score = this.calculateRelevance(query, node, key);
 
             if (score > 0) {
@@ -242,8 +338,8 @@ export class NodeSchemaProvider {
      * List all available nodes (compact format).
      */
     public listAllNodes(): INodeSchemaStub[] {
-        this.loadIndex();
-        return Object.values<any>(this.index.nodes).map(node => ({
+        const nodes = this.getMergedNodes();
+        return Object.values<any>(nodes).map(node => ({
             name: node.name,
             type: node.type || node.name,
             displayName: node.displayName,
